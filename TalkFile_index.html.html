@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>병동 감염관리 대시보드</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root {
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --text: #111111;      /* 기본 글씨: 검정 */
+    --sub: #333333;       /* 보조 글씨: 진회색(검정 계열) */
+    --line: #d9dee3;
+    --teal: #0d9488;      /* 포인트 컬러: 청록 */
+    --teal-dark: #0f766e;
+    --teal-tint: #f0fdfa;
+    --red: #dc2626;       /* 중요 표시: 빨강 */
+    --red-tint: #fef2f2;
+
+    /* 4대 전파경로 컬러 체계 */
+    --airborne: #dc2626;  --airborne-bg: #fef2f2;
+    --droplet:  #eab308;  --droplet-bg:  #fefce8;
+    --contact:  #ea580c;  --contact-bg:  #fff7ed;
+    --standard: #2563eb;  --standard-bg: #eff6ff;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Pretendard', 'Noto Sans KR', -apple-system, sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.5;
+  }
+  a { color: inherit; text-decoration: none; }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 16px; }
+  .imp { color: var(--red) !important; font-weight: 800; }
+
+  /* ── 상단 네비게이션 ── */
+  header { background: #fff; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 10; }
+  .nav { display: flex; align-items: center; justify-content: space-between; height: 64px; gap: 16px; }
+  .logo { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 1.1rem; color: var(--text); white-space: nowrap; }
+  .logo-mark { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--teal); color: #fff; font-size: 1.1rem; }
+  .menu { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; min-width: 0; }
+  .two-col > div, .quick > *, .q-card > div, .routes > *, .summary > * { min-width: 0; }
+  .menu::-webkit-scrollbar { display: none; }
+  .menu a { padding: 8px 14px; border-radius: 10px; font-size: .93rem; font-weight: 600; color: var(--text); white-space: nowrap; }
+  .menu a:hover { background: var(--teal-tint); color: var(--teal-dark); }
+  .menu a.active { background: var(--teal); color: #fff; }
+
+  /* ── Hero (청록 배경 → 흰 글씨) ── */
+  .hero {
+    margin-top: 24px; border-radius: 22px; padding: 36px; background: var(--teal); color: #fff;
+    display: flex; align-items: center; justify-content: space-between; gap: 24px; flex-wrap: wrap;
+  }
+  .hero .date { font-size: .9rem; color: #fff; font-weight: 600; opacity: .9; }
+  .hero h1 { font-size: 1.9rem; font-weight: 800; margin: 6px 0 8px; letter-spacing: -0.02em; color: #fff; }
+  .hero p { color: #fff; font-size: 1rem; max-width: 560px; }
+  .hero-actions { display: flex; flex-direction: column; gap: 10px; min-width: 260px; }
+  .btn-hero {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    background: #fff; color: var(--teal-dark); font-weight: 800; font-size: 1.12rem;
+    padding: 18px 26px; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,.15);
+    transition: transform .15s, box-shadow .15s;
+  }
+  .btn-hero:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(0,0,0,.22); }
+  .btn-hero .arrow { transition: transform .15s; }
+  .btn-hero:hover .arrow { transform: translateX(4px); }
+  .btn-ghost { text-align: center; color: #fff; font-weight: 700; font-size: .95rem; padding: 12px; border-radius: 14px; border: 1.5px solid #fff; }
+  .btn-ghost:hover { background: var(--teal-dark); }
+
+  /* ── 섹션 공통 ── */
+  section { margin-top: 32px; }
+  .sec-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+  .sec-head h2 { font-size: 1.25rem; font-weight: 800; color: var(--text); padding-left: 10px; border-left: 4px solid var(--teal); line-height: 1.2; }
+  .sec-head .sub { font-size: .88rem; color: var(--sub); margin-top: 4px; }
+
+  /* ── 병동 요약 ── */
+  .summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .sum-item { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; }
+  .sum-item .label { font-size: .88rem; color: var(--text); font-weight: 700; }
+  .sum-item .value { font-size: 1.6rem; font-weight: 800; margin-top: 2px; color: var(--text); }
+  .sum-item .value small { font-size: .95rem; color: var(--sub); font-weight: 600; }
+  .sum-item.imp-box { border: 2px solid var(--red); background: var(--red-tint); }
+  .meter { height: 6px; border-radius: 99px; background: #e5e7eb; margin-top: 8px; overflow: hidden; }
+  .meter > div { height: 100%; border-radius: 99px; background: var(--teal); }
+  .meter > div.full { background: var(--red); }
+  .full-note { font-size: .78rem; margin-top: 4px; display: none; }
+  .full-note.show { display: block; }
+
+  /* ── 4대 전파경로 카드 ── */
+  .routes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .route {
+    background: #fff; border-radius: 18px; padding: 20px; border: 1px solid var(--line); border-top: 6px solid var(--c);
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .route-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+  .route-name { font-weight: 800; font-size: 1.05rem; display: flex; align-items: center; gap: 6px; color: var(--text); }
+  .route-en { font-size: .75rem; color: var(--sub); font-weight: 600; }
+  .route-tag { font-size: .75rem; font-weight: 700; padding: 3px 10px; border-radius: 99px; background: var(--cbg); color: var(--text); border: 1px solid var(--c); white-space: nowrap; }
+  .route-count { display: flex; align-items: baseline; gap: 6px; }
+  .route-count .num { font-size: 3rem; font-weight: 800; line-height: 1; color: var(--text); }
+  .route.airborne .route-count .num { color: var(--red); }
+  .route-count .unit { font-size: 1rem; color: var(--text); font-weight: 600; }
+  .route-bar { height: 8px; border-radius: 99px; background: #eef0f2; overflow: hidden; }
+  .route-bar > div { height: 100%; background: var(--c); border-radius: 99px; transition: width .3s; }
+  .route-share { font-size: .82rem; color: var(--sub); }
+  .route-info { background: #f7f8f9; border-radius: 12px; padding: 10px 12px; font-size: .86rem; color: var(--text); }
+  .route-info b { color: var(--text); margin-right: 4px; }
+  .route-info div + div { margin-top: 3px; }
+  .route-ex { font-size: .82rem; color: var(--sub); }
+  .adjust { display: none; gap: 6px; }
+  body.edit .adjust { display: flex; }
+  .adjust button { flex: 1; border: none; background: var(--teal); color: #fff; border-radius: 10px; font-size: 1.1rem; font-weight: 800; padding: 5px 0; cursor: pointer; font-family: inherit; }
+  .adjust button:hover { background: var(--teal-dark); }
+
+  .route.airborne { --c: var(--airborne); --cbg: var(--airborne-bg); }
+  .route.droplet  { --c: var(--droplet);  --cbg: var(--droplet-bg); }
+  .route.contact  { --c: var(--contact);  --cbg: var(--contact-bg); }
+  .route.standard { --c: var(--standard); --cbg: var(--standard-bg); }
+
+  .edit-toggle { border: none; background: var(--teal); color: #fff; padding: 8px 14px; border-radius: 10px; font-size: .86rem; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .edit-toggle:hover { background: var(--teal-dark); }
+  body.edit .edit-toggle { background: var(--teal-dark); }
+
+  /* ── 바로가기 + 게시판 ── */
+  .two-col { display: grid; grid-template-columns: 1.15fr 1fr; gap: 18px; }
+  .quick { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .q-card { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 18px; display: flex; gap: 14px; align-items: flex-start; transition: border-color .15s, transform .15s; }
+  .q-card:hover { border-color: var(--teal); transform: translateY(-2px); }
+  .q-icon { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; font-size: 1.4rem; background: var(--teal-tint); flex-shrink: 0; }
+  .q-title { font-weight: 800; font-size: 1rem; color: var(--text); }
+  .q-desc { font-size: .86rem; color: var(--sub); margin-top: 2px; }
+  .q-go { font-size: .82rem; color: var(--teal-dark); font-weight: 800; margin-top: 6px; }
+  .q-card.primary { background: var(--teal); border-color: var(--teal); }
+  .q-card.primary .q-title, .q-card.primary .q-desc, .q-card.primary .q-go { color: #fff; }
+  .q-card.primary .q-icon { background: #fff; }
+  .q-card.primary:hover { background: var(--teal-dark); }
+
+  .board { background: #fff; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; }
+  .board-row { display: flex; align-items: center; gap: 10px; padding: 13px 18px; border-bottom: 1px solid var(--line); font-size: .93rem; color: var(--text); }
+  .board-row:last-child { border-bottom: none; }
+  .badge { font-size: .72rem; font-weight: 800; padding: 3px 8px; border-radius: 6px; flex-shrink: 0; color: #fff; }
+  .badge.notice { background: var(--red); }
+  .badge.guide  { background: var(--teal); }
+  .badge.edu    { background: #111; }
+  .board-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .board-date { font-size: .8rem; color: var(--sub); flex-shrink: 0; }
+
+  .checklist { margin-top: 14px; background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 16px 18px; }
+  .checklist h3 { font-size: .98rem; font-weight: 800; margin-bottom: 8px; color: var(--text); }
+  .checklist label { display: flex; gap: 10px; align-items: center; padding: 6px 0; font-size: .92rem; cursor: pointer; color: var(--text); }
+  .checklist input { width: 18px; height: 18px; accent-color: var(--teal); }
+  .checklist input:checked + span { color: #888; text-decoration: line-through; }
+
+  footer { margin: 40px 0 0; padding: 24px 0 36px; border-top: 1px solid var(--line); font-size: .83rem; color: var(--sub); }
+  footer a { color: var(--teal-dark); font-weight: 700; }
+  footer a:hover { text-decoration: underline; }
+
+  /* ── 반응형 ── */
+  @media (max-width: 960px) {
+    .routes, .summary { grid-template-columns: repeat(2, 1fr); }
+    .two-col { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 560px) {
+    .hero { padding: 26px 20px; }
+    .hero h1 { font-size: 1.5rem; }
+    .hero-actions { min-width: 0; width: 100%; }
+    .quick { grid-template-columns: 1fr; }
+    .route-count .num { font-size: 2.4rem; }
+    .logo span.txt { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ───────── 상단 메뉴 ───────── -->
+<header>
+  <div class="wrap nav">
+    <a class="logo" href="index.html"><span class="logo-mark">🏥</span><span class="txt">병동 감염관리</span></a>
+    <nav class="menu">
+      <a href="index.html" class="active">대시보드</a>
+      <a href="chatbot.html">격리 판단 챗봇</a>
+      <a href="ppe.html">보호구 점검</a>
+      <a href="protocol.html">격리 프로토콜</a>
+      <a href="education.html">감염관리 교육</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- ───────── Hero ───────── -->
+  <div class="hero">
+    <div>
+      <div class="date" id="today"></div>
+      <h1>오늘 병동 감염관리 현황</h1>
+      <p>신규 입원 환자가 있다면 먼저 감염 위험 스크리닝을 시작하세요. 다제내성균 위험과 증상을 사정해 선제 격리 여부와 대처 프로토콜을 안내합니다.</p>
+    </div>
+    <div class="hero-actions">
+      <a class="btn-hero" href="chatbot.html">🩺 신규 입원 환자 스크리닝 시작 <span class="arrow">→</span></a>
+      <a class="btn-ghost" href="ppe.html">🧤 보호구 착·탈의 점검하기</a>
+    </div>
+  </div>
+
+  <!-- ───────── 병동 요약 ───────── -->
+  <section>
+    <div class="summary">
+      <div class="sum-item">
+        <div class="label">재원 환자</div>
+        <div class="value"><span id="sumTotal">0</span><small> 명</small></div>
+      </div>
+      <div class="sum-item imp-box">
+        <div class="label imp">격리 중 환자</div>
+        <div class="value"><span id="sumIso" class="imp">0</span><small> 명</small></div>
+      </div>
+      <div class="sum-item">
+        <div class="label">음압격리실 사용</div>
+        <div class="value"><span id="sumNeg">0</span><small> / <span id="sumNegCap">0</span> 실</small></div>
+        <div class="meter"><div id="negMeter" style="width:0%"></div></div>
+        <div class="full-note imp" id="negNote">⚠ 음압격리실 만실</div>
+      </div>
+      <div class="sum-item">
+        <div class="label">1인 격리실 사용</div>
+        <div class="value"><span id="sumSingle">0</span><small> / <span id="sumSingleCap">0</span> 실</small></div>
+        <div class="meter"><div id="singleMeter" style="width:0%"></div></div>
+        <div class="full-note imp" id="singleNote">⚠ 1인 격리실 만실</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────── 4대 전파경로 현황 ───────── -->
+  <section>
+    <div class="sec-head">
+      <div>
+        <h2>전파경로별 격리 환자 현황</h2>
+        <div class="sub">마지막 업데이트: <span id="updated">-</span></div>
+      </div>
+      <button class="edit-toggle" id="editBtn" type="button">✏️ 인원 수정</button>
+    </div>
+    <div class="routes" id="routes"></div>
+  </section>
+
+  <!-- ───────── 바로가기 + 게시판 ───────── -->
+  <section class="two-col">
+    <div>
+      <div class="sec-head"><h2>바로가기</h2></div>
+      <div class="quick">
+        <a class="q-card primary" href="chatbot.html">
+          <div class="q-icon">🩺</div>
+          <div>
+            <div class="q-title">격리 판단 챗봇</div>
+            <div class="q-desc">MDRO 위험·증상 사정 → 위험도 판정 → SBAR 인계 문구</div>
+            <div class="q-go">바로 시작 →</div>
+          </div>
+        </a>
+        <a class="q-card" href="ppe.html">
+          <div class="q-icon">🧤</div>
+          <div>
+            <div class="q-title">보호구 착·탈의 점검</div>
+            <div class="q-desc">한 문제씩 풀고 즉시 피드백 받는 5문항 점검</div>
+            <div class="q-go">점검하기 →</div>
+          </div>
+        </a>
+        <a class="q-card" href="protocol.html">
+          <div class="q-icon">📋</div>
+          <div>
+            <div class="q-title">격리 프로토콜</div>
+            <div class="q-desc">공기·비말·접촉·표준주의별 지침과 다제내성균 관리</div>
+            <div class="q-go">지침 보기 →</div>
+          </div>
+        </a>
+        <a class="q-card" href="education.html">
+          <div class="q-icon">📚</div>
+          <div>
+            <div class="q-title">감염관리 교육</div>
+            <div class="q-desc">손위생 5원칙, 보호구 순서, 사례 학습 자료</div>
+            <div class="q-go">학습하기 →</div>
+          </div>
+        </a>
+      </div>
+    </div>
+
+    <div>
+      <div class="sec-head"><h2>공지 · 업데이트</h2><span class="sub">예시 게시물</span></div>
+      <div class="board">
+        <div class="board-row"><span class="badge notice">공지</span><span class="board-title imp">음압격리실 사용 전 문 닫힘·음압 표시 확인 필수</span><span class="board-date">11.18</span></div>
+        <div class="board-row"><span class="badge guide">지침</span><span class="board-title">C. difficile 의심 환자 손위생은 <b class="imp">물과 비누</b>로</span><span class="board-date">11.15</span></div>
+        <div class="board-row"><span class="badge guide">지침</span><span class="board-title">요양병원 전원 환자 입원 시 다제내성균 선별검사 시행</span><span class="board-date">11.12</span></div>
+        <div class="board-row"><span class="badge edu">교육</span><span class="board-title">보호구 탈의 순서: 장갑 → 고글 → 가운 → 마스크 → 손위생</span><span class="board-date">11.10</span></div>
+      </div>
+
+      <div class="checklist">
+        <h3>✅ 근무 시작 체크</h3>
+        <label><input type="checkbox" data-key="c1"><span>격리 환자 병실 앞 주의 표지 부착 확인</span></label>
+        <label><input type="checkbox" data-key="c2"><span>격리실 앞 보호구(장갑·가운·마스크) 비치 확인</span></label>
+        <label><input type="checkbox" data-key="c3"><span>신규 입원 환자 스크리닝 완료 여부 확인</span></label>
+        <label><input type="checkbox" data-key="c4"><span>선별검사 결과 확인 및 격리 해제 대상 확인</span></label>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    근거:
+    <a href="https://dportal.kdca.go.kr/pot/www/CVID19/INSP/INFCTN_MNGT.jsp?seq=TAB112_1#none" target="_blank" rel="noopener">질병관리청 의료관련감염 표준예방지침</a> ·
+    <a href="https://www.kdca.go.kr/" target="_blank" rel="noopener">질병관리청 다제내성균 감염관리 지침</a><br>
+    <span class="imp">교육용 프로토타입입니다.</span> 실제 임상 판단은 소속 기관 감염관리실 지침을 우선합니다.
+  </div>
+</footer>
+
+<script>
+/* ───────── 병동 데이터 (여기 숫자만 바꾸면 화면에 반영) ───────── */
+const WARD = {
+  totalPatients: 32,     // 재원 환자 수
+  negRoomCap: 2,         // 음압격리실 수
+  singleRoomCap: 6,      // 1인 격리실 수
+  updated: null          // null이면 현재 시각 표시
+};
+
+const ROUTES = [
+  { key: "airborne", icon: "🔴", name: "공기주의", en: "Airborne", count: 1,
+    tag: "음압격리실", ppe: "N95(KF94 이상)", room: "음압격리실, 문 닫기",
+    ex: "결핵, 수두, 홍역" },
+  { key: "droplet", icon: "🟡", name: "비말주의", en: "Droplet", count: 3,
+    tag: "1인실·코호트", ppe: "수술용 마스크", room: "1인실 또는 코호트, 1m 간격",
+    ex: "인플루엔자, 백일해" },
+  { key: "contact", icon: "🟠", name: "접촉주의", en: "Contact", count: 5,
+    tag: "1인실·코호트", ppe: "장갑 + 가운", room: "1인실 또는 코호트, 물품 전용",
+    ex: "CRE, VRE, MRSA, C. difficile" },
+  { key: "standard", icon: "🔵", name: "표준주의", en: "Standard", count: 23,
+    tag: "모든 환자", ppe: "노출 예상 시 착용", room: "일반 병실",
+    ex: "손위생 5원칙 준수" }
+];
+
+/* ───────── 저장된 수정값 불러오기 (브라우저에만 저장) ───────── */
+const STORE_KEY = "ward-dashboard-v1";
+function loadSaved() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "null");
+    if (saved && saved.counts) {
+      ROUTES.forEach(r => { if (typeof saved.counts[r.key] === "number") r.count = saved.counts[r.key]; });
+      WARD.updated = saved.updated || WARD.updated;
+    }
+  } catch (e) {}
+}
+function save() {
+  try {
+    const counts = {}; ROUTES.forEach(r => counts[r.key] = r.count);
+    localStorage.setItem(STORE_KEY, JSON.stringify({ counts, updated: WARD.updated }));
+  } catch (e) {}
+}
+
+/* ───────── 렌더링 ───────── */
+function fmt(d) {
+  const p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function setMeter(barId, noteId, used, cap) {
+  const full = used >= cap;
+  const bar = document.getElementById(barId);
+  bar.style.width = Math.min(100, cap ? used / cap * 100 : 0) + "%";
+  bar.classList.toggle("full", full);            // 만실이면 빨간색
+  document.getElementById(noteId).classList.toggle("show", full);
+}
+
+function render() {
+  const total = ROUTES.reduce((s, r) => s + r.count, 0);
+  const isolated = ROUTES.filter(r => r.key !== "standard").reduce((s, r) => s + r.count, 0);
+  const neg = ROUTES.find(r => r.key === "airborne").count;
+  const single = ROUTES.filter(r => r.key === "droplet" || r.key === "contact").reduce((s, r) => s + r.count, 0);
+
+  document.getElementById("routes").innerHTML = ROUTES.map(r => {
+    const pct = total ? Math.round(r.count / total * 100) : 0;
+    const label = r.key === "standard" ? "격리 외 환자" : "격리 중";
+    return `
+    <div class="route ${r.key}">
+      <div class="route-top">
+        <div>
+          <div class="route-name">${r.icon} ${r.name}</div>
+          <div class="route-en">${r.en} Precautions</div>
+        </div>
+        <span class="route-tag">${r.tag}</span>
+      </div>
+      <div class="route-count"><span class="num">${r.count}</span><span class="unit">명 ${label}</span></div>
+      <div class="route-bar"><div style="width:${pct}%"></div></div>
+      <div class="route-share">전체 재원 환자의 ${pct}%</div>
+      <div class="route-info">
+        <div><b>보호구</b> ${r.ppe}</div>
+        <div><b>병실</b> ${r.room}</div>
+      </div>
+      <div class="route-ex">예: ${r.ex}</div>
+      <div class="adjust">
+        <button type="button" data-k="${r.key}" data-d="-1" aria-label="${r.name} 1명 감소">−</button>
+        <button type="button" data-k="${r.key}" data-d="1" aria-label="${r.name} 1명 증가">+</button>
+      </div>
+    </div>`;
+  }).join("");
+
+  document.getElementById("sumTotal").textContent = total;
+  document.getElementById("sumIso").textContent = isolated;
+  document.getElementById("sumNeg").textContent = neg;
+  document.getElementById("sumNegCap").textContent = WARD.negRoomCap;
+  setMeter("negMeter", "negNote", neg, WARD.negRoomCap);
+  document.getElementById("sumSingle").textContent = single;
+  document.getElementById("sumSingleCap").textContent = WARD.singleRoomCap;
+  setMeter("singleMeter", "singleNote", single, WARD.singleRoomCap);
+  document.getElementById("updated").textContent = WARD.updated || fmt(new Date());
+}
+
+/* ───────── 인원 수정 모드 ───────── */
+document.getElementById("editBtn").addEventListener("click", () => {
+  const on = document.body.classList.toggle("edit");
+  document.getElementById("editBtn").textContent = on ? "✔ 수정 완료" : "✏️ 인원 수정";
+});
+document.getElementById("routes").addEventListener("click", e => {
+  const b = e.target.closest("button[data-k]");
+  if (!b) return;
+  const r = ROUTES.find(x => x.key === b.dataset.k);
+  r.count = Math.max(0, r.count + Number(b.dataset.d));
+  WARD.updated = fmt(new Date());
+  save(); render();
+});
+
+/* ───────── 근무 시작 체크 (오늘 날짜 기준 유지) ───────── */
+const CHECK_KEY = "ward-checklist-" + new Date().toDateString();
+document.querySelectorAll(".checklist input").forEach(cb => {
+  try { cb.checked = JSON.parse(localStorage.getItem(CHECK_KEY) || "{}")[cb.dataset.key] || false; } catch (e) {}
+  cb.addEventListener("change", () => {
+    try {
+      const s = JSON.parse(localStorage.getItem(CHECK_KEY) || "{}");
+      s[cb.dataset.key] = cb.checked;
+      localStorage.setItem(CHECK_KEY, JSON.stringify(s));
+    } catch (e) {}
+  });
+});
+
+/* ───────── 오늘 날짜 ───────── */
+(function () {
+  const d = new Date(), days = ["일", "월", "화", "수", "목", "금", "토"];
+  document.getElementById("today").textContent =
+    `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 (${days[d.getDay()]})`;
+})();
+
+loadSaved();
+render();
+</script>
+</body>
+</html>
